@@ -1,0 +1,28 @@
+# Directories
+vendor/
+bin/
+out/
+dist/
+
+# Binary files and compiled object files
+*.o
+*.exe
+*.out
+*.test
+*.so
+*.dylib
+*.bin
+
+# Generated files from BPF tools (if regenerated at build time)
+bpf_bpfeb.go
+bpf_bpfel.go
+
+# Specific binary for this project
+write-tracer
+
+# IDE and editor files
+.vscode/
+*.swp
+*~
+._*
+.DS_Store
