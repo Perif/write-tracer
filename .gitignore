@@ -26,3 +26,7 @@ write-tracer
 *~
 ._*
 .DS_Store
+
+# generated files
+utilities/echopid
+headers/vmlinux.h
