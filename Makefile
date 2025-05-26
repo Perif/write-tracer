@@ -5,6 +5,10 @@
 generate:
 	go generate ./...
 
+# Generate Go bindings from eBPF C code
+generate-debug:
+	BPF2GO_FLAGS="-O2 -g -Wall -Werror $(CFLAGS) -DDEBUG" go generate ./...
+
 # Build the application
 build: generate
 	go build -o write-tracer

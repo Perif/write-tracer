@@ -8,6 +8,16 @@
 
 #define MAX_FDS 64
 
+// Swap these defines out for debugging.  Logs can be seen with:
+// sudo cat /sys/kernel/debug/tracing/trace_pipe
+#ifdef DEBUG
+    #ifdef SSHTRACE_DEBUG
+        #define log_printk(fmt, args...)
+    #else
+        #define log_printk(fmt, args...) bpf_printk(fmt, ##args)
+    #endif
+#endif
+
 // Configuration structure
 struct config {
     __u32 target_pid;
@@ -90,6 +100,10 @@ int trace_write_enter(struct trace_event_raw_sys_enter* ctx) {
     event->timestamp = bpf_ktime_get_ns();
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
     
+#ifdef DEBUG
+    log_printk("trace_write_enter pid %d tid %d fd %d count %llu ^buff_len %d -> %s\n", 
+        event->pid, event->tid, event->fd, event->count, event->buf_len, (char*)event->buffer);
+#endif
     // Submit event
     bpf_ringbuf_submit(event, 0);
     
