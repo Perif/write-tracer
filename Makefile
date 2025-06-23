@@ -10,6 +10,10 @@ generate-debug:
 	BPF2GO_FLAGS="-O2 -g -Wall -Werror $(CFLAGS) -DDEBUG" go generate ./...
 
 # Build the application
+build-debug: generate-debug
+	go build -o write-tracer
+
+# Build the application
 build: generate
 	go build -o write-tracer
 
