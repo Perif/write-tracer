@@ -1,10 +1,10 @@
 # Go eBPF Write Tracer 
 
-## Getting the program to run
+## 1 - Getting the program to run
 
 To run the code you need to retrieve the header for your kernel. Assuming you aleady have it, you can run the steps below to build and run the code.
 
-### 1. Build and Run
+### 1.1 - Build and Run
 
 See below how to build and run the write tracer app. 
 
@@ -22,7 +22,7 @@ make build
 sudo ./write-tracer -p <PID> -f [fd1],[fd2] ...
 ```
 
-### 2. Get vmlinux.h
+### 1.2 - Get vmlinux.h
 
 You need kernel type definitions. Pick one option:
 
@@ -42,7 +42,7 @@ mkdir headers
 curl -o headers/vmlinux.h https://raw.githubusercontent.com/aquasecurity/tracee/main/3rdparty/btfhub/vmlinux_ubuntu_2204_x86_64.h
 ```
 
-## 3. Test the tool
+## 3 - Test the tool
 
 Use the echopid utility:
 ```bash
@@ -62,11 +62,11 @@ To trace only file descriptors 0 and 1:
 ```
 
 
-## Running as a deamon
+## 4 - Running as a deamon
 
 To run the code as a deamon you can pick one of the two options below.
 
-### Option 1 : Systemd Service with Capabilities
+### 4.1 - Option 1 : Systemd Service with Capabilities
 
 Create a systemd service that runs with minimal privileges:
 
@@ -106,7 +106,7 @@ sudo systemctl enable write-tracer
 sudo systemctl start write-tracer
 sudo systemctl status write-tracer
 ```
-### Option 2: Container Approach
+### 4.2 Option 2: Container Approach
 
 Run in a container with specific capabilities:
 
@@ -135,4 +135,18 @@ docker run --rm \
   -v /sys:/sys:ro \
   -v /proc:/proc:ro \
   write-tracer -p 1234
+```
+
+## 5. Debug ebpf
+
+To print debug information in the epbf code (`write-tracer.pbf.c`) you need to genreate a debug go bpf code:
+
+```bash
+make generate-debug
+```
+
+Then when running the application, open a terminal and run the following:
+
+```bash
+sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
