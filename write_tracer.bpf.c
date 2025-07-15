@@ -12,28 +12,28 @@
 
 // Configuration structure
 struct config {
-    u32 target_pid;
-    u32 num_fds;
-    u32 target_fds[MAX_FDS];
+    __u32 target_pid;
+    __u32 num_fds;
+    __u32 target_fds[MAX_FDS];
 };
 
-// Event structure
+// Event structure, shared by the user space code
 struct write_event {
-    u32 pid;
-    u32 tid;
-    u32 fd;
-    u64 count;
-    u64 timestamp;
-    u8 comm[MAX_EXEC_NAME_SIZE];
-    u8 data[MAX_DATA_SIZE];
-
+    __u64 timestamp;
+    __u64 count;
+    __u32 pid;
+    __u32 tid;
+    __u32 fd;
+    __u32 _padding; // Explicit padding for 8-byte alignment
+    __u8 comm[MAX_EXEC_NAME_SIZE];
+    __u8 data[MAX_DATA_SIZE];
 };
 
 // Maps
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
-    __type(key, u32);
+    __type(key, __u32);
     __type(value, struct config);
 } config_map SEC(".maps");
 
@@ -43,7 +43,7 @@ struct {
 } events SEC(".maps");
 
 // Helper function to check if fd is in target list
-static __always_inline int is_target_fd(struct config *cfg, u32 fd) {
+static __always_inline int is_target_fd(struct config *cfg, __u32 fd) {
     for (int i = 0; i < MAX_FDS; i++) {
         if (i >= cfg->num_fds) break;
         if (cfg->target_fds[i] == fd) {
@@ -55,12 +55,12 @@ static __always_inline int is_target_fd(struct config *cfg, u32 fd) {
 
 SEC("tracepoint/syscalls/sys_enter_write")
 int trace_write_enter(struct trace_event_raw_sys_enter* ctx) {
-    u64 pid_tgid = bpf_get_current_pid_tgid();
-    u32 pid = pid_tgid >> 32;
-    u32 tid = (u32)pid_tgid;
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = pid_tgid >> 32;
+    __u32 tid = (__u32)pid_tgid;
     
     // Get configuration
-    u32 key = 0;
+    __u32 key = 0;
     struct config *cfg = bpf_map_lookup_elem(&config_map, &key);
     if (!cfg) {
         return 0;
@@ -75,9 +75,9 @@ int trace_write_enter(struct trace_event_raw_sys_enter* ctx) {
     // args[0] is the file descriptor (fd).
     // args[1] is the user-space buffer (buf).
     // args[2] is the count of bytes to write.
-    u64 fd = ctx->args[0];
+    __u64 fd = ctx->args[0];
     const char *buf = (const char*)ctx->args[1];
-    size_t count = (size_t)ctx->args[2];
+    __u64 count = ctx->args[2];
     
     // Check if this fd is in our target list
     if (cfg->num_fds > 0 && !is_target_fd(cfg, fd)) {
@@ -94,13 +94,14 @@ int trace_write_enter(struct trace_event_raw_sys_enter* ctx) {
     event->pid = pid; // process ID
     event->tid = tid; // thread ID
     event->fd = fd; // file descriptor
-    u32 data_size = count < MAX_DATA_SIZE ? count : MAX_DATA_SIZE;
-    event->count = data_size;
-    event->timestamp = bpf_ktime_get_ns(); // time 
+    event->count = count; // get the number of elements 
+    // get the time when the call is interpreted by epbf
+    event->timestamp = bpf_ktime_get_ns(); 
     // get the current name of the process
     bpf_get_current_comm(event->comm, sizeof(event->comm));
 
     // Read the data from the user-space buffer.
+    __u32 data_size = count < MAX_DATA_SIZE ? count : MAX_DATA_SIZE;
     bpf_probe_read_user(event->data, data_size, buf);
 
     

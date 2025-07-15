@@ -37,11 +37,12 @@ type Config struct {
 
 // WriteEvent matches the eBPF struct
 type WriteEvent struct {
+	Timestamp uint64
+	Count     uint64
 	PID       uint32
 	TID       uint32
 	FD        uint32
-	Count     uint64
-	Timestamp uint64
+	_         uint32 // Padding to match eBPF struct
 	Comm      [maxExecNameSize]byte
 	Data      [maxDataSize]byte
 }
@@ -279,7 +280,8 @@ func startEventProcessing(ctx context.Context, eventsMap *ebpf.Map) error {
 					"tid", event.TID,
 					"comm", string(bytes.TrimRight(event.Comm[:], "\x00")),
 					"fd", event.FD,
-					"bytes", event.Count,
+					"count", event.Count,
+					"bytes", string(event.Data[:event.Count]),
 				)
 			}
 		}
