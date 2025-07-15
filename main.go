@@ -25,6 +25,8 @@ import (
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags $BPF_CFLAGS bpf write_tracer.bpf.c -- -I./headers
 
 const maxFDs = 64
+const maxDataSize = 256
+const maxExecNameSize = 16
 
 // Config matches the eBPF struct
 type Config struct {
@@ -40,7 +42,8 @@ type WriteEvent struct {
 	FD        uint32
 	Count     uint64
 	Timestamp uint64
-	Comm      [16]byte
+	Comm      [maxExecNameSize]byte
+	Data      [maxDataSize]byte
 }
 
 func (e WriteEvent) String() string {
@@ -266,6 +269,8 @@ func startEventProcessing(ctx context.Context, eventsMap *ebpf.Map) error {
 					slog.Error("Failed to parse event", "error", err)
 					continue
 				}
+
+				fmt.Println(event)
 
 				// Log the event details as info
 				slog.Info("Write event",
