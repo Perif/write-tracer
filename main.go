@@ -55,7 +55,7 @@ func (e WriteEvent) String() string {
 	t := time.Unix(0, int64(e.Timestamp))
 
 	return fmt.Sprintf("[%s] PID: %d, TID: %d, COMM: %s, FD: %d, BYTES: %d",
-		t.Format("15:04:05.000"), e.PID, e.TID, comm, e.Count)
+		t.Format("15:04:05.000"), e.PID, e.TID, comm, e.FD, e.Count)
 }
 
 func getLogLevel() slog.Level {
@@ -281,7 +281,7 @@ func startEventProcessing(ctx context.Context, eventsMap *ebpf.Map) error {
 					"comm", string(bytes.TrimRight(event.Comm[:], "\x00")),
 					"fd", event.FD,
 					"count", event.Count,
-					"bytes", string(event.Data[:event.Count]),
+					"bytes", strings.TrimRight(string(event.Data[:event.Count]), "\n\r"),
 				)
 			}
 		}
@@ -297,20 +297,15 @@ func main() {
 	config := process_args()
 
 	// Log configuration details
-	fields := []slog.Attr{
-		slog.Uint64("pid", uint64(config.TargetPID)),
-	}
 	if config.NumFDs > 0 {
 		var fds []uint32
 		// Safely copy FDs up to NumFDs
 		fds = make([]uint32, config.NumFDs)
 		copy(fds, config.TargetFDs[:config.NumFDs])
-		fields = append(fields, slog.Any("file_descriptors", fds))
+		slog.Info("Monitoring write calls","pid",config.TargetPID,"file_descriptors", fds)
 	} else {
-		fields = append(fields, slog.String("file_descriptors", "all"))
+		slog.Info("Monitoring write calls","pid",config.TargetPID,"file_descriptors", "all")
 	}
-
-	slog.Info("Monitoring write calls", fields)
 
 	coll, link, err := loadAndConfigureEBPF(config)
 	if err != nil {
