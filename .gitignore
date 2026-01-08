@@ -29,4 +29,5 @@ write-tracer
 
 # generated files
 utilities/echopid
+utilities/test_fork
 headers/vmlinux.h
