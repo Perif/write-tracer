@@ -1,76 +1,102 @@
 # Go eBPF Write Tracer 
 
-## 1 - Getting the program to run
+Trace write syscalls for a process and its children using eBPF.
 
-To run the code you need to retrieve the header for your kernel. Assuming you aleady have it, you can run the steps below to build and run the code.
+## Features
 
-### 1.1 - Build and Run
+- **Thread Tracking**: Automatically tracks all threads and child processes
+- **JSON Output**: Events exported as JSON to stdout, file, and/or Loki
+- **File Rotation**: Configurable rotation based on record count
+- **Prometheus Metrics**: Exposes `write_tracer_tracked_threads` and `write_tracer_write_calls_total`
 
-See below how to build and run the write tracer app. 
-
-```bash
-# Install dependencies
-make deps
-
-# Generate eBPF bindings (this compiles the .bpf.c file)
-make generate
-
-# Build the Go application
-make build
-
-# Run (needs root privileges)
-sudo ./write-tracer -p <PID> -f [fd1],[fd2] ...
-```
-
-### 1.2 - Get vmlinux.h
-
-You need kernel type definitions. Pick one option:
-
-#### Option A: Generate from your kernel
-```bash
-mkdir headers
-# If you have bpftool installed:
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > headers/vmlinux.h
-
-# Or use this script:
-curl -sf https://raw.githubusercontent.com/aquasecurity/libbpfgo/main/helpers/kernel-config.sh | bash
-```
-
-#### Option B: Download pre-built (Ubuntu/x86_64)
-```bash
-mkdir headers
-curl -o headers/vmlinux.h https://raw.githubusercontent.com/aquasecurity/tracee/main/3rdparty/btfhub/vmlinux_ubuntu_2204_x86_64.h
-```
-
-## 3 - Test the tool
-
-Use the echopid utility:
-```bash
-# Find your target process
-cd utilities && make && ./echopid
-```
-
-Run the tracer on all file-descriptors, assuming that echopid gave PID `441368`:
+## Build
 
 ```bash
-./write-tracer -p 441368
+make deps      # Install dependencies
+make build     # Build the application
 ```
-To trace only file descriptors 0 and 1:
+
+### Prerequisites
+
+You need kernel type definitions. Generate from your kernel:
+```bash
+mkdir -p bpf/headers
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > bpf/headers/vmlinux.h
+```
+
+## Usage
 
 ```bash
-./write-tracer -p 441368 -f 0,1
+sudo ./write-tracer -p <PID> [options]
 ```
 
+### Options
 
-## 4 - Running as a deamon
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--pid` | `-p` | Target PID (required) |
+| `--file-output` | `-o` | Output file path |
+| `--file-descriptors` | `-f` | Comma-separated FDs to filter |
+| `--tracking-interval` | `-i` | Status update interval (seconds) |
+| `--max-records-fileoutput` | `-n` | Records per file before rotation |
+| `--loki-endpoint` | `-l` | Loki push endpoint URL |
+| `--metrics-port` | | Prometheus metrics port (default 2112) |
 
-To run the code as a deamon you can pick one of the two options below.
+### Examples
 
-### 4.1 - Option 1 : Systemd Service with Capabilities
+```bash
+# Trace all writes for PID 1234
+sudo ./write-tracer -p 1234
 
-Create a systemd service that runs with minimal privileges:
+# Filter to stdout/stderr only, write to file
+sudo ./write-tracer -p 1234 -f 1,2 -o /tmp/trace.log
 
-#### Create Service File: `/etc/systemd/system/write-tracer.service`
+# With Prometheus metrics on port 9100
+sudo ./write-tracer -p 1234 --metrics-port 9100
+```
+
+## Prometheus Metrics
+
+```bash
+curl http://localhost:2112/metrics | grep write_tracer
+```
+
+- `write_tracer_tracked_threads` — current thread count
+- `write_tracer_write_calls_total` — total captured write calls
+
+## Project Structure
+
+```
+write-tracer/
+├── cmd/tracer/           # Entry point
+├── internal/
+│   ├── config/           # CLI flag parsing
+│   ├── ebpf/             # eBPF loading and event processing
+│   ├── event/            # WriteEvent struct
+│   └── output/           # File, Loki, and Prometheus output
+├── bpf/                  # eBPF C source and headers
+└── utilities/            # Test utilities
+```
+
+## Testing
+
+```bash
+cd utilities && go build -o echopid echopid.go && ./echopid &
+sudo ./write-tracer -p $!
+```
+
+## Debug eBPF
+
+```bash
+make generate-debug
+sudo cat /sys/kernel/debug/tracing/trace_pipe
+```
+
+## Running as a Daemon
+
+### Systemd Service
+
+Create `/etc/systemd/system/write-tracer.service`:
 ```ini
 [Unit]
 Description=eBPF Write Tracer
@@ -78,75 +104,26 @@ After=network.target
 
 [Service]
 Type=simple
-User=your-username
-Group=your-group
-ExecStart=/path/to/write-tracer 1234
+User=root
+ExecStart=/usr/local/bin/write-tracer -p <TARGET_PID>
 Restart=always
 RestartSec=5
 
-# Grant only required capabilities
 CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
 AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
 
-# Security hardening
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/log
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-#### Enable and Start:
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable write-tracer
 sudo systemctl start write-tracer
-sudo systemctl status write-tracer
-```
-### 4.2 Option 2: Container Approach
-
-Run in a container with specific capabilities:
-
-#### Dockerfile:
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go build -o write-tracer
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /app/write-tracer .
-CMD ["./write-tracer"]
-```
-
-#### Run with Capabilities:
-```bash
-docker build -t write-tracer .
-
-docker run --rm \
-  --cap-add=BPF \
-  --cap-add=PERFMON \
-  --cap-add=SYS_ADMIN \
-  -v /sys:/sys:ro \
-  -v /proc:/proc:ro \
-  write-tracer -p 1234
-```
-
-## 5. Debug ebpf
-
-To print debug information in the epbf code (`write-tracer.pbf.c`) you need to genreate a debug go bpf code:
-
-```bash
-make generate-debug
-```
-
-Then when running the application, open a terminal and run the following:
-
-```bash
-sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
