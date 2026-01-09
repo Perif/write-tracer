@@ -25,6 +25,8 @@ type Config struct {
 	TrackingInterval     time.Duration
 	MaxRecordsFileOutput int
 	MetricsPort          int
+	RESTPort             int
+	SilenceStdout        bool
 }
 
 func Parse() Config {
@@ -50,6 +52,12 @@ func Parse() Config {
 
 	metricsPortPtr := flag.Int("metrics-port", 2112, "Port for Prometheus metrics endpoint (0 to disable)")
 
+	restPortPtr := flag.Int("rest-port", 9092, "Port for REST API endpoint (0 to disable)")
+	restPortShorthandPtr := flag.Int("r", 0, "Shorthand for --rest-port")
+
+	silenceStdoutPtr := flag.Bool("no-stdout", false, "Deactivate logging to stdout")
+	silenceStdoutShorthandPtr := flag.Bool("q", false, "Shorthand for --no-stdout")
+
 	flag.Usage = func() {
 		fmt.Printf("Usage: %s --pid <pid> [options]\n\n", os.Args[0])
 		fmt.Println("Options:")
@@ -59,8 +67,11 @@ func Parse() Config {
 	flag.Parse()
 
 	targetPID := coalesce(*pidShorthandPtr, *pidPtr)
-	if targetPID == 0 {
-		slog.Error("PID is required")
+	restPort := coalesce(*restPortShorthandPtr, *restPortPtr)
+
+	// PID is optional if REST mode is enabled (REST can register PIDs dynamically)
+	if targetPID == 0 && restPort == 0 {
+		slog.Error("PID is required (or enable REST API with --rest-port)")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -84,6 +95,8 @@ func Parse() Config {
 		TrackingInterval:     time.Duration(trackingInterval) * time.Second,
 		MaxRecordsFileOutput: maxRecords,
 		MetricsPort:          *metricsPortPtr,
+		RESTPort:             restPort,
+		SilenceStdout:        *silenceStdoutPtr || *silenceStdoutShorthandPtr,
 	}
 
 	if fdString != "" {

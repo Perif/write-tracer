@@ -1,27 +1,22 @@
-.PHONY: all build run clean
-
-# Define the Go source file
-SRC = echopid.go
-
-# Define the executable name
-EXEC = echopid
-
-# Default target: builds and then runs the program
-all: build run
-
-# Build target: compiles the Go program
-build:
-	@echo "Building $(SRC)..."
-	go build -o $(EXEC) $(SRC)
+.PHONY: all build clean
+ 
+# List of utility programs
+UTILS = echopid test_fork
+ 
+# Default target
+all: build
+ 
+# Build target: compiles all utilities
+build: $(UTILS)
+ 
+# Generic pattern rule for building Go programs
+%: %.go
+	@echo "Building $@..."
+	go build -o $@ $<
 	@echo "Build complete."
-
-# Run target: executes the compiled program
-run: build
-	@echo "Running $(EXEC)..."
-	./$(EXEC)
-
-# Clean target: removes the compiled executable
+ 
+# Clean target: removes the compiled executables
 clean:
 	@echo "Cleaning up..."
-	@rm -f $(EXEC)
+	@rm -f $(UTILS)
 	@echo "Clean complete."

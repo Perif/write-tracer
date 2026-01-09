@@ -40,12 +40,17 @@ func Load(cfg config.Config) (*ebpf.Collection, []link.Link, error) {
 		return nil, nil, fmt.Errorf("update config map: %w", err)
 	}
 
-	count, err := initTrackedPids(coll, cfg.TargetPID)
-	if err != nil {
-		coll.Close()
-		return nil, nil, err
+	count := 0
+	// Only initialize from CLI PID if it's set
+	if cfg.TargetPID != 0 {
+		var err error
+		count, err = InitTrackedPids(coll, cfg.TargetPID)
+		if err != nil {
+			coll.Close()
+			return nil, nil, err
+		}
+		slog.Info("Initialized tracking", "target_pid", cfg.TargetPID, "threads_found", count)
 	}
-	slog.Info("Initialized tracking", "target_pid", cfg.TargetPID, "threads_found", count)
 
 	links, err := attachTracepoints(coll)
 	if err != nil {
@@ -56,7 +61,7 @@ func Load(cfg config.Config) (*ebpf.Collection, []link.Link, error) {
 	return coll, links, nil
 }
 
-func initTrackedPids(coll *ebpf.Collection, targetPID uint32) (int, error) {
+func InitTrackedPids(coll *ebpf.Collection, targetPID uint32) (int, error) {
 	tids, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", targetPID))
 	if err != nil {
 		return 0, fmt.Errorf("read threads: %w", err)

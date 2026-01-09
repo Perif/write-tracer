@@ -49,7 +49,9 @@ func processEvents(ctx context.Context, cfg config.Config, rd *ringbuf.Reader, e
 			return
 		case ev := <-eventChan:
 			line := ev.String()
-			fmt.Println(line)
+			if !cfg.SilenceStdout {
+				fmt.Println(line)
+			}
 			output.IncrementWriteCalls()
 
 			if err := fw.Write(line); err != nil {
