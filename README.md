@@ -30,23 +30,57 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > bpf/headers/vmlinux.h
 sudo ./write-tracer -p <PID> [options]
 ```
 
-### Options
+## Configuration
 
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--pid` | `-p` | Target PID (required) |
-| `--file-output` | `-o` | Output file path |
-| `--file-descriptors` | `-f` | Comma-separated FDs to filter |
-| `--tracking-interval` | `-i` | Status update interval (seconds) |
-| `--max-records-fileoutput` | `-n` | Records per file before rotation |
-| `--loki-endpoint` | `-l` | Loki push endpoint URL |
-| `--metrics-port` | | Prometheus metrics port (default 2112) |
+- `--pid <PID>`: Process ID to monitor (required unless `--rest-port` is used).
+- `--rest-port <port>`: Enable REST API for dynamic PID registration (default: disabled).
+- `--metrics-port <port>`: Port for Prometheus metrics (default: 2112).
+- `--loki-endpoint <URL>`: URL of Loki server to push logs.
+- `--tracking-interval <seconds>`: Interval to update tracked threads (default: 5).
+- `--no-stdout`: Deactivate logging to stdout (shorthand `-q`).
+
+## REST API
+
+When `--rest-port` is enabled (e.g., `--rest-port 9092`), you can dynamically manage tracked PIDs.
+
+**Endpoints:**
+- `POST /pids`: Register a PID `{"pid": 12345}`
+- `DELETE /pids/<pid>`: Unregister a PID
+- `GET /pids`: List tracked PIDs
+
+The tracer automatically stops tracking a PID when its process terminates.
+
+**Usage Examples:**
+
+1. **Register a PID:**
+    ```bash
+    curl -X POST http://127.0.0.1:9092/pids \
+         -H "Content-Type: application/json" \
+         -d '{"pid": 12345}'
+    ```
+
+2. **List tracked PIDs:**
+    ```bash
+    curl http://127.0.0.1:9092/pids
+    ```
+
+3. **Unregister a PID:**
+    ```bash
+    curl -X DELETE http://127.0.0.1:9092/pids/12345
+    ```
+
+## Output
+
+The tracer generates logs in the following format:
 
 ### Examples
 
 ```bash
 # Trace all writes for PID 1234
 sudo ./write-tracer -p 1234
+
+# Use REST API for dynamic PID registration (no initial PID)
+sudo ./write-tracer --rest-port 9092
 
 # Filter to stdout/stderr only, write to file
 sudo ./write-tracer -p 1234 -f 1,2 -o /tmp/trace.log
@@ -70,10 +104,12 @@ curl http://localhost:2112/metrics | grep write_tracer
 write-tracer/
 ├── cmd/tracer/           # Entry point
 ├── internal/
+│   ├── api/              # REST API server
 │   ├── config/           # CLI flag parsing
 │   ├── ebpf/             # eBPF loading and event processing
 │   ├── event/            # WriteEvent struct
-│   └── output/           # File, Loki, and Prometheus output
+│   ├── output/           # File, Loki, and Prometheus output
+│   └── pidmgr/           # PID tracking registry
 ├── bpf/                  # eBPF C source and headers
 └── utilities/            # Test utilities
 ```
