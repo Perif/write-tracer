@@ -114,6 +114,18 @@ write-tracer/
 └── utilities/            # Test utilities
 ```
 
+## Performance Testing
+To measure the overhead of the tracer, use the provided benchmark script:
+```bash
+sudo ./utilities/analyze_performance.sh
+```
+This script performs two types of benchmarks:
+1. **Stream Throughput**: Measures worst-case overhead using `dd` (100% write saturation).
+2. **AI Workload Simulation**: Simulates a Compute-Sleep-Write-Burst pattern (mimicking PyTorch/Megatron-LM checkpoints) to show amortized overhead.
+
+* **Stream Throughput**: Expect **5% - 15%** overhead (worst case, write saturation).
+* **AI Workloads**: Expect **negligible** overhead (mostly 0%, as writes are bursty).
+
 ## Testing
 
 ```bash
