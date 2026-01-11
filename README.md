@@ -109,7 +109,8 @@ write-tracer/
 │   ├── ebpf/             # eBPF loading and event processing
 │   ├── event/            # WriteEvent struct
 │   ├── output/           # File, Loki, and Prometheus output
-│   └── pidmgr/           # PID tracking registry
+│   ├── pidmgr/           # PID tracking registry
+│   └── slurm/            # Slurm SPANK plugin
 ├── bpf/                  # eBPF C source and headers
 └── utilities/            # Test utilities
 ```
@@ -175,3 +176,85 @@ sudo systemctl daemon-reload
 sudo systemctl enable write-tracer
 sudo systemctl start write-tracer
 ```
+
+## Slurm SPANK Plugin
+
+The Slurm SPANK plugin automatically registers Slurm tasks with the `write-tracer` REST API upon task initialization and unregisters them on exit.
+
+### Compilation
+The plugin requires Slurm development headers and `libcurl`.
+
+```bash
+make slurm-plugin
+```
+
+This produces `slurm_write_tracer.so` in the `utilities/` directory.
+
+### Installation
+1. Copy the shared object to a location accessible by Slurm (e.g., `/usr/local/lib/slurm/`).
+2. Create the configuration directory:
+   ```bash
+   sudo mkdir -p /etc/write-tracer
+   ```
+3. Create a configuration file `/etc/write-tracer/plugin.conf` with the tracer URL:
+   ```ini
+   TRACER_URL=http://localhost:9092
+   ```
+
+### Activation
+Add the plugin to Slurm's `plugstack.conf` (usually in `/etc/slurm/`):
+
+```
+optional /path/to/slurm_write_tracer.so
+```
+
+When a job is launched, the plugin will:
+1. Send a POST request to `TRACER_URL/pids` with the task's PID.
+2. Send a DELETE request to `TRACER_URL/pids/<pid>` when the task exits.
+
+## Parallel Code Examples
+
+Examples for MPI and NCCL are provided in the `utilities/` directory. These demonstrate how to manually register parallel processes for monitoring.
+
+### MPI Example
+Requires MPI and `libcurl`.
+
+**Compile:**
+```bash
+make mpi-example
+```
+
+**Run:**
+```bash
+mpirun -np 4 ./mpi_example
+```
+
+### NCCL Example
+Requires NCCL, MPI, CUDA, and `libcurl`.
+
+**Compile:**
+```bash
+make nccl-example
+```
+
+**Run:**
+```bash
+mpirun -np 4 ./nccl_example
+```
+
+## Python Client
+
+A Python helper class is available in `utilities/python/writetracer.py` to simplify interaction with the REST API.
+
+### Usage
+
+```python
+from writetracer import WriteTracer
+
+# Use as a context manager (auto-registers and unregisters)
+with WriteTracer() as tracer:
+    # Your code here
+    pass
+```
+
+See `utilities/python/example.py` for a complete example.
