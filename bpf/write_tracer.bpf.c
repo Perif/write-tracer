@@ -5,10 +5,26 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
+#include <linux/version.h>
 
-#define MAX_FDS 64            // maximum number of file descriptors
+// Get the kernel version and set variadic variable for bpf_printk
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+  #define BPF_PRINTK_VARIADIC 1
+#endif
+
+// Event capture configuration
+#define MAX_FDS 64            // maximum number of file descriptors to filter
 #define MAX_DATA_SIZE 256     // max bytes retrieved from the write buffer
-#define MAX_EXEC_NAME_SIZE 16 // max size of the program name
+#define MAX_EXEC_NAME_SIZE 16 // max size of the program name (task_struct->comm)
+
+// Ring buffer configuration
+// 256KB provides enough space for ~1000 concurrent write events
+// assuming average event size of ~256 bytes (sizeof(write_event))
+#define RINGBUF_SIZE (256 * 1024)
+
+// Maximum number of threads/processes that can be tracked simultaneously
+// Set to support large parallel applications (e.g., MPI jobs with 10k ranks)
+#define MAX_TRACKED_THREADS 10240
 
 // Configuration structure
 struct config {
@@ -39,12 +55,12 @@ struct {
 
 struct {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
-  __uint(max_entries, 256 * 1024);
+  __uint(max_entries, RINGBUF_SIZE);
 } events SEC(".maps");
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 10240);
+  __uint(max_entries, MAX_TRACKED_THREADS);
   __type(key, __u32);
   __type(value, __u32);
 } tracked_pids SEC(".maps");
@@ -117,11 +133,19 @@ int trace_write_enter(struct trace_event_raw_sys_enter *ctx) {
   // Logs can be seen with:
   // sudo cat /sys/kernel/debug/tracing/trace_pipe
 
-  bpf_printk(
-      "trace_write_enter pid %d tid %d fd %d count %llu name %s data %s\n",
-      event->pid, event->tid, event->fd, event->count, (char *)event->comm,
-      (char *)event->data);
+  // Changing to two separate print statements: https://github.com/Perif/write-tracer/issues/2
+  #ifdef BPF_PRINTK_VARIADIC
+    // Variadic bpf_printk - kernel version 5.16 or later (https://docs.ebpf.io/ebpf-library/libbpf/ebpf/bpf_printk/)
+    bpf_printk(
+        "trace_write_enter pid %d tid %d fd %d count %llu name %s data %s\n",
+        event->pid, event->tid, event->fd, event->count, (char *)event->comm,
+        (char *)event->data);
+  #else
+    bpf_printk("trace_write_enter: pid=%d tid=%d fd=%d", event->pid, event->tid, event->fd);
+    bpf_printk("[cont.] trace_write_enter: count=%llu comm=%s", event->count, (char *)event->comm);
+  #endif
   // #endif
+    
   // Submit event
   bpf_ringbuf_submit(event, 0);
 
