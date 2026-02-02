@@ -21,7 +21,10 @@ type WriteEvent struct {
 
 func (e WriteEvent) String() string {
 	comm := string(bytes.TrimRight(e.Comm[:], "\x00"))
-	data := strings.TrimRight(string(e.Data[:e.Count]), "\n\r")
+
+	// Cap data length to actual buffer size
+	dataLen := min(e.Count, config.MaxDataSize)
+	data := strings.TrimRight(string(e.Data[:dataLen]), "\n\r")
 
 	m := map[string]any{
 		"timestamp": e.Timestamp,
@@ -42,5 +45,6 @@ func (e WriteEvent) CommString() string {
 }
 
 func (e WriteEvent) DataString() string {
-	return strings.TrimRight(string(e.Data[:e.Count]), "\n\r")
+	dataLen := min(e.Count, config.MaxDataSize)
+	return strings.TrimRight(string(e.Data[:dataLen]), "\n\r")
 }
