@@ -56,6 +56,12 @@ func (w *FileWriter) Close() error {
 }
 
 func (w *FileWriter) open() error {
+	// If file exists, rotate it on startup
+	if _, err := os.Stat(w.path); err == nil {
+		w.shiftBackups()
+		os.Rename(w.path, w.path+".1")
+	}
+
 	f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
