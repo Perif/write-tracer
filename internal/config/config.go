@@ -24,6 +24,7 @@ type Config struct {
 	FileOutput           string
 	TrackingInterval     time.Duration
 	MaxRecordsFileOutput int
+	MaxBackups           int
 	MetricsPort          int
 	RESTPort             int
 	SilenceStdout        bool
@@ -47,8 +48,10 @@ func Parse() Config {
 	trackingIntervalPtr := flag.Int("tracking-interval", 5, "Interval in seconds for tracking status updates")
 	trackingIntervalShorthandPtr := flag.Int("i", 5, "Shorthand for --tracking-interval")
 
-	maxRecordsPtr := flag.Int("max-records-fileoutput", 1000, "Maximum records per file before rotation")
+	maxRecordsPtr := flag.Int("max-records-fileoutput", 50000, "Maximum records per file before rotation")
 	maxRecordsShorthandPtr := flag.Int("n", 0, "Shorthand for --max-records-fileoutput")
+
+	maxBackupsPtr := flag.Int("max-backups", 50, "Maximum number of rotated backup files to keep (0 = unlimited)")
 
 	metricsPortPtr := flag.Int("metrics-port", 2112, "Port for Prometheus metrics endpoint (0 to disable)")
 
@@ -85,7 +88,7 @@ func Parse() Config {
 	}
 	maxRecords := coalesce(*maxRecordsShorthandPtr, *maxRecordsPtr)
 	if maxRecords == 0 {
-		maxRecords = 1000
+		maxRecords = 50000
 	}
 
 	cfg := Config{
@@ -94,6 +97,7 @@ func Parse() Config {
 		FileOutput:           fileOutput,
 		TrackingInterval:     time.Duration(trackingInterval) * time.Second,
 		MaxRecordsFileOutput: maxRecords,
+		MaxBackups:           *maxBackupsPtr,
 		MetricsPort:          *metricsPortPtr,
 		RESTPort:             restPort,
 		SilenceStdout:        *silenceStdoutPtr || *silenceStdoutShorthandPtr,
