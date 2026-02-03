@@ -35,7 +35,7 @@ func StartProcessing(ctx context.Context, cfg config.Config, eventsMap, trackedP
 func processEvents(ctx context.Context, cfg config.Config, rd *ringbuf.Reader, eventChan <-chan event.WriteEvent) {
 	defer rd.Close()
 
-	fw := output.NewFileWriter(cfg.FileOutput, cfg.MaxRecordsFileOutput)
+	fw := output.NewFileWriter(cfg.FileOutput, cfg.MaxRecordsFileOutput, cfg.MaxBackups)
 	defer fw.Close()
 
 	var loki *output.LokiClient

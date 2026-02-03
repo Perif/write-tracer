@@ -3,19 +3,25 @@ package output
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 type FileWriter struct {
 	path       string
 	maxRecords int
+	maxBackups int
 	file       *os.File
 	count      int
 }
 
-func NewFileWriter(path string, maxRecords int) *FileWriter {
+func NewFileWriter(path string, maxRecords int, maxBackups int) *FileWriter {
 	return &FileWriter{
 		path:       path,
 		maxRecords: maxRecords,
+		maxBackups: maxBackups,
 	}
 }
 
@@ -64,8 +70,59 @@ func (w *FileWriter) rotate() {
 		w.file.Close()
 		w.file = nil
 	}
-	backup := w.path + ".1"
-	os.Remove(backup)
-	os.Rename(w.path, backup)
+
+	// Shift existing backups: .N --> .N+1, remove oldest if it exceeds maxBackups
+	w.shiftBackups()
+
+	// Rename current file to .1
+	os.Rename(w.path, w.path+".1")
+
+	// Open new file
 	w.open()
+}
+
+func (w *FileWriter) shiftBackups() {
+	if w.maxBackups <= 0 {
+		// No limit (aka very large limit), persist all the backups
+		w.maxBackups = 1000
+	}
+
+	// Find all the existing backup files
+	dir := filepath.Dir(w.path)
+	base := filepath.Base(w.path)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	// Collect backup numbers
+	var backupNums []int
+	prefix := base + "."
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, prefix) {
+			suffix := strings.TrimPrefix(name, prefix)
+			if num, err := strconv.Atoi(suffix); err == nil && num > 0 {
+				backupNums = append(backupNums, num)
+			}
+		}
+	}
+
+	// Sort in descending order
+	sort.Sort(sort.Reverse(sort.IntSlice(backupNums)))
+
+	for _, num := range backupNums {
+		oldPath := fmt.Sprintf("%s.%d", w.path, num)
+		newNum := num + 1
+
+		if newNum > w.maxBackups {
+			// Remove files that exceed the limit
+			os.Remove(oldPath)
+		} else {
+			// Shift file
+			newPath := fmt.Sprintf("%s.%d", w.path, newNum)
+			os.Rename(oldPath, newPath)
+		}
+	}
 }
