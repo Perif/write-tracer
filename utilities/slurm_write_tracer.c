@@ -31,6 +31,9 @@ typedef struct {
 // Global configuration
 static plugin_config_t config;
 
+// Flag to track registered PIDs
+static __thread int pid_registered = 0;
+
 // Helper to trim whitespace
 static char *trim_whitespace(char *str) {
     char *end;
@@ -145,6 +148,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char **av) {
     
     if (send_request("/pids", json_payload, "POST") == 0) {
         // slurm_info("write-tracer: Registered PID %d", pid);
+        pid_registered = 1;
     } 
     
     return 0; // Always return 0 to allow task to proceed
@@ -152,14 +156,18 @@ int slurm_spank_task_init(spank_t sp, int ac, char **av) {
 
 // Called for each task exit
 int slurm_spank_task_exit(spank_t sp, int ac, char **av) {
-    pid_t pid = getpid();
-    char url_path[64];
-    
-    snprintf(url_path, sizeof(url_path), "/pids/%d", pid);
-    
-    if (send_request(url_path, NULL, "DELETE") == 0) {
-        // slurm_info("write-tracer: Unregistered PID %d", pid);
-    }
+    // Only unregister if the PID was actually registered
+    if (pid_registered) {
+        pid_t pid = getpid();
+        char url_path[64];
 
+        snprintf(url_path, sizeof(url_path), "/pids/%d", pid);
+    
+        if (send_request(url_path, NULL, "DELETE") == 0) {
+            // slurm_info("write-tracer: Unregistered PID %d", pid);
+        }
+        pid_registered = 0;
+    }
+    
     return 0;
 }
