@@ -11,7 +11,8 @@ CFLAGS = -Wall -O2
 LIBS = -lcurl
  
 # Slurm specific settings
-SLURM_CFLAGS = $(shell pkg-config --cflags slurm 2>/dev/null || echo "-I/usr/include/slurm")
+SLURM_INCLUDE ?= $(shell pkg-config --cflags slurm 2>/dev/null | sed 's/-I//' || echo "/usr/include/slurm")
+SLURM_CFLAGS = -I$(SLURM_INCLUDE)# Note: SPANK plugins are shared objects
 # Note: SPANK plugins are shared objects
  
 # Default target
