@@ -190,7 +190,7 @@ make slurm-plugin
 
 Alternatively, if your Slurm headers exist on a path other than `/usr/include/slurm/spank.h, use:
 ```bash
-make slurm-plugin SLURM_INCLUDE=/cm/shared/apps/slurm/24.05.4/include
+make slurm-plugin SLURM_INCLUDE=/path/to/include/directory
 ```
 
 This produces `slurm_write_tracer.so` in the `utilities/` directory.
