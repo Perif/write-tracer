@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -32,6 +33,7 @@ func NewLokiClient(endpoint string) *LokiClient {
 }
 
 func (l *LokiClient) Push(ev event.WriteEvent) error {
+
 	stream := lokiStream{
 		Stream: map[string]string{
 			"app":  "write-tracer",
@@ -40,7 +42,7 @@ func (l *LokiClient) Push(ev event.WriteEvent) error {
 			"fd":   fmt.Sprintf("%d", ev.FD),
 		},
 		Values: [][]string{
-			{fmt.Sprintf("%d", ev.Timestamp), ev.DataString()},
+			{fmt.Sprintf("%d", time.Now().UnixNano()), ev.DataString()},
 		},
 	}
 
@@ -50,6 +52,9 @@ func (l *LokiClient) Push(ev event.WriteEvent) error {
 		return err
 	}
 
+	// DEBUG: Get the loki push request body
+	// slog.Info("Loki push request", "body", string(body))
+
 	resp, err := l.client.Post(l.endpoint, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
@@ -57,7 +62,11 @@ func (l *LokiClient) Push(ev event.WriteEvent) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("loki returned status %d", resp.StatusCode)
+		// DEBUG: Read response body to see what Loki is complaining about
+		respBody, _ := io.ReadAll(resp.Body)
+
+		return fmt.Errorf("loki returned status %d: %s", resp.StatusCode, string(respBody))
+		// return fmt.Errorf("loki returned status %d", resp.StatusCode)
 	}
 
 	return nil
